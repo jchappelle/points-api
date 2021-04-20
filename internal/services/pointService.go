@@ -1,7 +1,6 @@
 package services
 
 import (
-	"context"
 	"errors"
 	"sort"
 	"time"
@@ -11,13 +10,13 @@ import (
 
 // pointsDB is an abstraction for the database layer dependencies used by this package
 type pointsDB interface {
-	AddTransaction(ctx context.Context, transaction model.Transaction) error
-	GetAccounts(ctx context.Context) ([]model.Account, error)
-	GetAccount(ctx context.Context, payer string) (model.Account, bool, error)
-	GetTransactions(ctx context.Context) ([]model.Transaction, error)
+	AddTransaction(userID string, transaction model.Transaction)
+	GetAccounts(userID string) []model.Account
+	GetAccount(userID string, payer string) (model.Account, bool)
+	GetTransactions(userID string) []model.Transaction
 }
 
-var NotEnoughPointsErr = errors.New("not enough points")
+var notEnoughPointsErr = errors.New("not enough points")
 
 // PointService houses the business logic of the api. It delegates data manipulation tasks
 // to a pointsDB interface.
@@ -34,33 +33,28 @@ func NewPointService(db pointsDB) *PointService {
 
 // AddPoints adds the given model.Transaction to the db. If the point value is negative
 // then it must not take the payer's account balance lower than 0. If it results in a
-// negative account balance, an error will be returned. An error can also be returned
-// if the database layer returns an error.
-func (s *PointService) AddPoints(ctx context.Context, transaction model.Transaction) error {
+// negative account balance, an error will be returned.
+func (s *PointService) AddPoints(userID string, transaction model.Transaction) error {
 	if transaction.Points > 0 {
-		return s.DB.AddTransaction(ctx, transaction)
+		s.DB.AddTransaction(userID, transaction)
+		return nil
 	} else {
-		totalPoints, err := s.getTotalPointsForPayer(ctx, transaction.Payer)
-		if err != nil {
-			return err
-		}
+		totalPoints := s.getTotalPointsForPayer(userID, transaction.Payer)
 
 		if totalPoints >= -transaction.Points {
-			return s.DB.AddTransaction(ctx, transaction)
+			s.DB.AddTransaction(userID, transaction)
+			return nil
 		} else {
-			return NotEnoughPointsErr
+			return notEnoughPointsErr
 		}
 	}
 }
 
 // SpendPoints consumes points from transactions starting with the oldest transaction going
 // forward and returns new transactions as a result of the operation. Returns an error if
-// there are not enough points or if the db layer returns an error.
-func (s *PointService) SpendPoints(ctx context.Context, points int) ([]model.Transaction, error) {
-	transactions, err := s.DB.GetTransactions(ctx)
-	if err != nil {
-		return []model.Transaction{}, err
-	}
+// there are not enough points.
+func (s *PointService) SpendPoints(userID string, points int) ([]model.Transaction, error) {
+	transactions := s.DB.GetTransactions(userID)
 
 	pointsRemaining := points
 	newTranMap := make(map[string]*model.Transaction, 0)
@@ -86,13 +80,13 @@ func (s *PointService) SpendPoints(ctx context.Context, points int) ([]model.Tra
 	}
 
 	if pointsRemaining > 0 {
-		return []model.Transaction{}, NotEnoughPointsErr
+		return []model.Transaction{}, notEnoughPointsErr
 	}
 
 	var newTransactions []model.Transaction
 	for _, val := range newTranMap {
 		newTransactions = append(newTransactions, *val)
-		s.DB.AddTransaction(ctx, *val)
+		s.DB.AddTransaction(userID, *val)
 	}
 
 	sort.Slice(newTransactions, func(i, j int) bool {
@@ -103,21 +97,17 @@ func (s *PointService) SpendPoints(ctx context.Context, points int) ([]model.Tra
 }
 
 // GetAccounts returns all payer accounts which includes the associated balances.
-// Returns an error if the db layer returns an error.
-func (s *PointService) GetAccounts(ctx context.Context) ([]model.Account, error) {
-	return s.DB.GetAccounts(ctx)
+func (s *PointService) GetAccounts(userID string) []model.Account {
+	return s.DB.GetAccounts(userID)
 }
 
-func (s *PointService) getTotalPointsForPayer(ctx context.Context, payer string) (int, error) {
+func (s *PointService) getTotalPointsForPayer(userID string, payer string) int {
 	pointSum := 0
-	transactions, err := s.DB.GetTransactions(ctx)
-	if err != nil {
-		return 0, err
-	}
+	transactions := s.DB.GetTransactions(userID)
 	for _, tran := range transactions {
 		if tran.Payer == payer {
 			pointSum += tran.Points
 		}
 	}
-	return pointSum, nil
+	return pointSum
 }

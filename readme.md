@@ -30,31 +30,30 @@ go test ./...
 #### Initialize transactions
 ```
 curl -X POST \
-  http://localhost:8090/v1/points/add \
+  http://localhost:8090/v1/users/1/points/add \
   -d '{ "payer": "DANNON", "points": 1000, "timestamp": "2020-11-02T14:00:00Z" }'
 
 curl -X POST \
-  http://localhost:8090/v1/points/add \
+  http://localhost:8090/v1/users/1/points/add \
   -d '{ "payer": "UNILEVER", "points": 200, "timestamp": "2020-10-31T11:00:00Z" }'
 
 curl -X POST \
-  http://localhost:8090/v1/points/add \
+  http://localhost:8090/v1/users/1/points/add \
   -d '{ "payer": "DANNON", "points": -200, "timestamp": "2020-10-31T15:00:00Z" }'
 
 curl -X POST \
-  http://localhost:8090/v1/points/add \
+  http://localhost:8090/v1/users/1/points/add \
   -d '{ "payer": "MILLER COORS", "points": 10000, "timestamp": "2020-11-01T14:00:00Z" }'
 
 curl -X POST \
-  http://localhost:8090/v1/points/add \
-  -d '{ "payer": "DANNON", "points": 300, "timestamp": "2020-10-31T10:00:00Z" }'
+  http://localhost:8090/v1/users/1/points/add \
+  -d '{ "payer": "DANNON", "points": 300, "timestamp": "2020-10-31T10:00:00Z" }'  
 ```
 
 #### Spend points
 ```
 curl -X POST \
-  http://localhost:8090/v1/points/spend \
-  -H 'Postman-Token: cfc0f25b-5469-4cd3-8dc6-b9b7383f1fb3' \
+  http://localhost:8090/v1/users/1/points/spend \
   -d '{
 	"points": 5000
 }'
@@ -62,5 +61,7 @@ curl -X POST \
 
 #### Get payer balances
 ```
-curl -X GET http://localhost:8090/v1/payers
+curl -X GET \
+  http://localhost:8090/v1/users/1/payers
+
 ```

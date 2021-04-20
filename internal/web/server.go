@@ -1,13 +1,13 @@
 package web
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 
 	"fetchrewards.com/points-api/internal/model"
+	"github.com/gorilla/mux"
 )
 
 type spendPointsRequest struct {
@@ -15,9 +15,9 @@ type spendPointsRequest struct {
 }
 
 type pointService interface {
-	AddPoints(ctx context.Context, transaction model.Transaction) error
-	GetAccounts(ctx context.Context) ([]model.Account, error)
-	SpendPoints(ctx context.Context, points int) ([]model.Transaction, error)
+	AddPoints(userID string, transaction model.Transaction) error
+	GetAccounts(userID string) []model.Account
+	SpendPoints(userID string, points int) ([]model.Transaction, error)
 }
 
 // Server provides functionality for starting the server and routing web requests to the
@@ -42,16 +42,25 @@ func (s *Server) Start(port int) {
 }
 
 func (s *Server) setupHandlers() http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/points/add", s.addPointsHandler)
-	mux.HandleFunc("/v1/payers", s.getPayersHandler)
-	mux.HandleFunc("/v1/points/spend", s.spendPointsHandler)
+	mux := mux.NewRouter()
+	mux.HandleFunc("/v1/users/{userID}/points/add", s.addPointsHandler)
+	mux.HandleFunc("/v1/users/{userID}/payers", s.getPayersHandler)
+	mux.HandleFunc("/v1/users/{userID}/points/spend", s.spendPointsHandler)
 	return loggingMiddleware(mux)
 }
 
 func (s *Server) spendPointsHandler(w http.ResponseWriter, req *http.Request) {
 	switch req.Method {
 	case http.MethodPost:
+		// Get and validate userID
+		vars := mux.Vars(req)
+		userID := vars["userID"]
+		if userID == "" {
+			http.Error(w, "userID is required", http.StatusBadRequest)
+			return
+		}
+
+		// Marshal request into a struct
 		spendPointsRequest := spendPointsRequest{}
 		err := json.NewDecoder(req.Body).Decode(&spendPointsRequest)
 		if err != nil {
@@ -59,11 +68,14 @@ func (s *Server) spendPointsHandler(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		updatedTransactions, err := s.service.SpendPoints(req.Context(), spendPointsRequest.Points)
+		// Try to spend the points
+		updatedTransactions, err := s.service.SpendPoints(userID, spendPointsRequest.Points)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+
+		// Return final response
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(updatedTransactions)
 	default:
@@ -74,11 +86,16 @@ func (s *Server) spendPointsHandler(w http.ResponseWriter, req *http.Request) {
 func (s *Server) getPayersHandler(w http.ResponseWriter, req *http.Request) {
 	switch req.Method {
 	case http.MethodGet:
-		accounts, err := s.service.GetAccounts(req.Context())
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+		// Get and validate userID
+		vars := mux.Vars(req)
+		userID := vars["userID"]
+		if userID == "" {
+			http.Error(w, "userID is required", http.StatusBadRequest)
 			return
 		}
+
+		accounts := s.service.GetAccounts(userID)
+
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(accounts)
 	default:
@@ -89,13 +106,29 @@ func (s *Server) getPayersHandler(w http.ResponseWriter, req *http.Request) {
 func (s *Server) addPointsHandler(w http.ResponseWriter, req *http.Request) {
 	switch req.Method {
 	case http.MethodPost:
+		// Get and validate userID
+		vars := mux.Vars(req)
+		userID := vars["userID"]
+		if userID == "" {
+			http.Error(w, "userID is required", http.StatusBadRequest)
+			return
+		}
+
+		// Marshal request into a struct
 		transaction := model.Transaction{}
 		err := json.NewDecoder(req.Body).Decode(&transaction)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		s.service.AddPoints(req.Context(), transaction)
+
+		// Try to add the transaction
+		err = s.service.AddPoints(userID, transaction)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNoContent)
 	default:

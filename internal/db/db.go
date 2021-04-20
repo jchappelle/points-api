@@ -1,7 +1,6 @@
 package db
 
 import (
-	"context"
 	"log"
 	"sort"
 
@@ -10,7 +9,7 @@ import (
 
 // InMemoryDB holds all Transactions in memory and provides various accessors for the data
 type InMemoryDB struct {
-	Transactions []model.Transaction
+	UserTransactions map[string][]model.Transaction
 }
 
 // NewInMemoryDB returns a new InMemoryDB and initializes an empty slice of model.Transactions.
@@ -18,32 +17,36 @@ type InMemoryDB struct {
 func NewInMemoryDB() *InMemoryDB {
 	log.Println("Creating new in-memory database")
 
+	userTransactions := make(map[string][]model.Transaction, 0)
 	return &InMemoryDB{
-		Transactions: []model.Transaction{},
+		UserTransactions: userTransactions,
 	}
 }
 
-// GetTransactions returns all the model.Transaction records in time ascending order
-func (db *InMemoryDB) GetTransactions(ctx context.Context) ([]model.Transaction, error) {
-	result := db.Transactions
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].Timestamp.Before(result[j].Timestamp)
-	})
-	return result, nil
-}
-
-// AddTransaction adds the given model.Transaction to the internal slice of transactions
-func (db *InMemoryDB) AddTransaction(ctx context.Context, transaction model.Transaction) error {
-	db.Transactions = append(db.Transactions, transaction)
-	return nil
-}
-
-// GetAccounts returns all model.Accounts, or payers, that are found across all model.Transactions.
-func (db *InMemoryDB) GetAccounts(ctx context.Context) ([]model.Account, error) {
-	accountMap, err := db.getAccountMap(ctx)
-	if err != nil {
-		return []model.Account{}, err
+// GetTransactions returns all the model.Transaction records in time ascending order for the user
+func (db *InMemoryDB) GetTransactions(userID string) []model.Transaction {
+	if transactions, ok := db.UserTransactions[userID]; ok {
+		sort.Slice(transactions, func(i, j int) bool {
+			return transactions[i].Timestamp.Before(transactions[j].Timestamp)
+		})
+		return transactions
+	} else {
+		return []model.Transaction{}
 	}
+}
+
+// AddTransaction adds the given model.Transaction for this user
+func (db *InMemoryDB) AddTransaction(userID string, transaction model.Transaction) {
+	if transactions, ok := db.UserTransactions[userID]; ok {
+		db.UserTransactions[userID] = append(transactions, transaction)
+	} else {
+		db.UserTransactions[userID] = []model.Transaction{transaction}
+	}
+}
+
+// GetAccounts returns all model.Accounts, or payers, across all transactions for this user
+func (db *InMemoryDB) GetAccounts(userID string) []model.Account {
+	accountMap := db.getAccountMap(userID)
 
 	var result []model.Account
 	for _, value := range accountMap {
@@ -52,22 +55,20 @@ func (db *InMemoryDB) GetAccounts(ctx context.Context) ([]model.Account, error) 
 	sort.Slice(result, func(i, j int) bool {
 		return result[i].Payer < result[j].Payer
 	})
-	return result, nil
+	return result
 }
 
-// GetAccount returns the model.Account for the given payer
-func (db *InMemoryDB) GetAccount(ctx context.Context, payer string) (model.Account, bool, error) {
-	accountMap, err := db.getAccountMap(ctx)
-	if err != nil {
-		return model.Account{}, false, err
-	}
+// GetAccount returns the model.Account associated with the payer for this user
+func (db *InMemoryDB) GetAccount(userID, payer string) (model.Account, bool) {
+	accountMap := db.getAccountMap(userID)
 	account, found := accountMap[payer]
-	return account, found, nil
+	return account, found
 }
 
-func (db *InMemoryDB) getAccountMap(ctx context.Context) (map[string]model.Account, error) {
+func (db *InMemoryDB) getAccountMap(userID string) map[string]model.Account {
 	var accountMap = make(map[string]model.Account, 0)
-	for _, tran := range db.Transactions {
+	transactions := db.GetTransactions(userID)
+	for _, tran := range transactions {
 		if account, ok := accountMap[tran.Payer]; ok {
 			account.Points += tran.Points
 			accountMap[tran.Payer] = account
@@ -78,5 +79,5 @@ func (db *InMemoryDB) getAccountMap(ctx context.Context) (map[string]model.Accou
 			}
 		}
 	}
-	return accountMap, nil
+	return accountMap
 }

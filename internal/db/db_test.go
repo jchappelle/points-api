@@ -1,7 +1,6 @@
 package db_test
 
 import (
-	"context"
 	"testing"
 
 	"fetchrewards.com/points-api/internal/db"
@@ -10,17 +9,21 @@ import (
 )
 
 func TestAddTransaction(t *testing.T) {
-	ctx := context.Background()
+	userID := "1"
+
 	db := db.NewInMemoryDB()
 
-	err := db.AddTransaction(ctx, test.Data[0])
-	assert.NoError(t, err)
+	db.AddTransaction(userID, test.Data[0])
+	db.AddTransaction(userID, test.Data[1])
 
-	err = db.AddTransaction(ctx, test.Data[1])
-	assert.NoError(t, err)
+	transactions := db.GetTransactions(userID)
+	assert.Len(t, transactions, 2)
 
-	assert.Len(t, db.Transactions, 2)
-	assert.Equal(t, "DANNON", db.Transactions[0].Payer)
-	assert.Equal(t, 1000, db.Transactions[0].Points)
-	assert.Equal(t, test.ParseTime("2020-11-02T14:00:00Z"), db.Transactions[0].Timestamp)
+	assert.Equal(t, "UNILEVER", transactions[0].Payer)
+	assert.Equal(t, 200, transactions[0].Points)
+	assert.Equal(t, test.ParseTime("2020-10-31T11:00:00Z"), transactions[0].Timestamp)
+
+	assert.Equal(t, "DANNON", transactions[1].Payer)
+	assert.Equal(t, 1000, transactions[1].Points)
+	assert.Equal(t, test.ParseTime("2020-11-02T14:00:00Z"), transactions[1].Timestamp)
 }

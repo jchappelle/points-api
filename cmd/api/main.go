@@ -17,8 +17,6 @@ const DefaultPort = 8090
 //
 // Optional: provide a port for which to run the server
 // go cmd/api/main.go 8080
-//
-//
 func main() {
 	db := db.NewInMemoryDB()
 	service := services.NewPointService(db)

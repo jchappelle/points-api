@@ -2,8 +2,8 @@ package web
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -16,12 +16,13 @@ import (
 )
 
 func TestGetPayers(t *testing.T) {
-	withEnv(func(env serverEnv){
+	withEnv(func(env serverEnv) {
+		userID := "1"
 		for _, transaction := range test.Data {
-			env.service.AddPoints(context.Background(), transaction)
+			env.service.AddPoints(userID, transaction)
 		}
 
-		r, err := http.NewRequest("GET", "/v1/payers", nil)
+		r, err := http.NewRequest("GET", fmt.Sprintf("/v1/users/%s/payers", userID), nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -43,7 +44,8 @@ func TestGetPayers(t *testing.T) {
 }
 
 func TestAddTransaction(t *testing.T) {
-	withEnv(func(env serverEnv){
+	withEnv(func(env serverEnv) {
+		userID := "1"
 		transaction := model.Transaction{
 			Payer:     "DANNON",
 			Points:    1000,
@@ -52,7 +54,7 @@ func TestAddTransaction(t *testing.T) {
 		requestBody, err := json.Marshal(transaction)
 		assert.NoError(t, err)
 
-		r, err := http.NewRequest("POST", "/v1/points/add", bytes.NewBufferString(string(requestBody)))
+		r, err := http.NewRequest("POST", fmt.Sprintf("/v1/users/%s/points/add", userID), bytes.NewBufferString(string(requestBody)))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -64,15 +66,18 @@ func TestAddTransaction(t *testing.T) {
 		resp := w.Result()
 
 		assert.Equal(t, http.StatusNoContent, resp.StatusCode, "Should return status 204")
-		assert.Len(t, env.db.Transactions, 1)
-		assert.Equal(t, "DANNON", env.db.Transactions[0].Payer)
+
+		transactions := env.db.GetTransactions(userID)
+		assert.Len(t, transactions, 1)
+		assert.Equal(t, "DANNON", transactions[0].Payer)
 	})
 }
 
 func TestSpendPoints(t *testing.T) {
-	withEnv(func(env serverEnv){
+	withEnv(func(env serverEnv) {
+		userID := "1"
 		for _, transaction := range test.Data {
-			env.service.AddPoints(context.Background(), transaction)
+			env.service.AddPoints(userID, transaction)
 		}
 
 		spendPointsRequest := spendPointsRequest{
@@ -81,7 +86,7 @@ func TestSpendPoints(t *testing.T) {
 		requestBody, err := json.Marshal(spendPointsRequest)
 		assert.NoError(t, err)
 
-		r, err := http.NewRequest("POST", "/v1/points/spend", bytes.NewBufferString(string(requestBody)))
+		r, err := http.NewRequest("POST", fmt.Sprintf("/v1/users/%s/points/spend", userID), bytes.NewBufferString(string(requestBody)))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -93,31 +98,33 @@ func TestSpendPoints(t *testing.T) {
 		resp := w.Result()
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode, "Should return status 200")
-		assert.Len(t, env.db.Transactions, 8)
-		assert.Equal(t, "DANNON", env.db.Transactions[0].Payer)
-		assert.Equal(t, 300, env.db.Transactions[0].Points)
-		assert.Equal(t, "MILLER COORS", env.db.Transactions[7].Payer)
-		assert.Equal(t, -4700, env.db.Transactions[7].Points)
+
+		transactions := env.db.GetTransactions(userID)
+		assert.Len(t, transactions, 8)
+		assert.Equal(t, "DANNON", transactions[0].Payer)
+		assert.Equal(t, 300, transactions[0].Points)
+		assert.Equal(t, "MILLER COORS", transactions[7].Payer)
+		assert.Equal(t, -4700, transactions[7].Points)
 	})
 }
 
 // serverEnv is a struct used to house test dependencies
 type serverEnv struct {
-	db *db.InMemoryDB
+	db      *db.InMemoryDB
 	service *services.PointService
-	server *Server
+	server  *Server
 }
 
 // withEnv sets up common test dependencies and makes them available via a serverEnv to the given function
-func withEnv(f func (env serverEnv)) {
+func withEnv(f func(env serverEnv)) {
 	db := db.NewInMemoryDB()
 	service := services.NewPointService(db)
 	server := NewServer(service)
 
 	env := serverEnv{
-		db: db,
+		db:      db,
 		service: service,
-		server: server,
+		server:  server,
 	}
 
 	f(env)

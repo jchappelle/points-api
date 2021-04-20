@@ -1,9 +1,9 @@
 package services_test
 
 import (
-	"context"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"fetchrewards.com/points-api/internal/db"
 	"fetchrewards.com/points-api/internal/services"
@@ -11,16 +11,16 @@ import (
 )
 
 func TestSpendPoints(t *testing.T) {
-	ctx := context.Background()
+	userID := "1"
 	db := db.NewInMemoryDB()
 	service := services.NewPointService(db)
 
 	for _, transaction := range test.Data {
-		err := service.AddPoints(ctx, transaction)
+		err := service.AddPoints(userID, transaction)
 		assert.NoError(t, err)
 	}
 
-	transactions, err := service.SpendPoints(ctx, 5000)
+	transactions, err := service.SpendPoints(userID, 5000)
 	assert.NoError(t, err)
 	assert.Len(t, transactions, 3)
 
