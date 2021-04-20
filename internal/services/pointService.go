@@ -3,11 +3,13 @@ package services
 import (
 	"context"
 	"errors"
-	"fetchrewards.com/points-api/internal/model"
 	"sort"
 	"time"
+
+	"fetchrewards.com/points-api/internal/model"
 )
 
+// pointsDB is an abstraction for the database layer dependencies used by this package
 type pointsDB interface {
 	AddTransaction(ctx context.Context, transaction model.Transaction) error
 	GetAccounts(ctx context.Context) ([]model.Account, error)
@@ -17,15 +19,23 @@ type pointsDB interface {
 
 var NotEnoughPointsErr = errors.New("not enough points")
 
+// PointService houses the business logic of the api. It delegates data manipulation tasks
+// to a pointsDB interface.
 type PointService struct {
 	DB pointsDB
 }
+
+// NewPointService creates a new PointService with the given pointsDB
 func NewPointService(db pointsDB) *PointService {
 	return &PointService{
 		DB: db,
 	}
 }
 
+// AddPoints adds the given model.Transaction to the db. If the point value is negative
+// then it must not take the payer's account balance lower than 0. If it results in a
+// negative account balance, an error will be returned. An error can also be returned
+// if the database layer returns an error.
 func (s *PointService) AddPoints(ctx context.Context, transaction model.Transaction) error {
 	if transaction.Points > 0 {
 		return s.DB.AddTransaction(ctx, transaction)
@@ -43,6 +53,9 @@ func (s *PointService) AddPoints(ctx context.Context, transaction model.Transact
 	}
 }
 
+// SpendPoints consumes points from transactions starting with the oldest transaction going
+// forward and returns new transactions as a result of the operation. Returns an error if
+// there are not enough points or if the db layer returns an error.
 func (s *PointService) SpendPoints(ctx context.Context, points int) ([]model.Transaction, error) {
 	transactions, err := s.DB.GetTransactions(ctx)
 	if err != nil {
@@ -65,8 +78,8 @@ func (s *PointService) SpendPoints(ctx context.Context, points int) ([]model.Tra
 			t.Points = t.Points + balanceDiff
 		} else {
 			newTranMap[tran.Payer] = &model.Transaction{
-				Payer: tran.Payer,
-				Points: balanceDiff,
+				Payer:     tran.Payer,
+				Points:    balanceDiff,
 				Timestamp: time.Now(),
 			}
 		}
@@ -89,6 +102,8 @@ func (s *PointService) SpendPoints(ctx context.Context, points int) ([]model.Tra
 	return newTransactions, nil
 }
 
+// GetAccounts returns all payer accounts which includes the associated balances.
+// Returns an error if the db layer returns an error.
 func (s *PointService) GetAccounts(ctx context.Context) ([]model.Account, error) {
 	return s.DB.GetAccounts(ctx)
 }

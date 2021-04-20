@@ -20,16 +20,21 @@ type pointService interface {
 	SpendPoints(ctx context.Context, points int) ([]model.Transaction, error)
 }
 
+// Server provides functionality for starting the server and routing web requests to the
+// appropriate handlers. Handlers delegate business logic to a pointService interface
+// for executing the business logic.
 type Server struct {
 	service pointService
 }
 
+// NewServer creates a new Server configured with the given pointService
 func NewServer(service pointService) *Server {
 	return &Server{
 		service: service,
 	}
 }
 
+// Start starts the web server on the given port
 func (s *Server) Start(port int) {
 	addr := fmt.Sprintf(":%d", port)
 	log.Printf("Starting web server, listening at %s", addr)

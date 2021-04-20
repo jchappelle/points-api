@@ -11,7 +11,7 @@ You can run this project two different ways, build the binary and run the binary
 go build cmd/api
 ./api
 ```
-### Running with `go` commaand
+### Running with the `go` commaand
 ```
 go run cmd/api
 ```
@@ -24,4 +24,43 @@ go run cmd/api 9090
 ## Testing
 ```
 go test ./...
+```
+### Local endpoint testing
+
+#### Initialize transactions
+```
+curl -X POST \
+  http://localhost:8090/v1/points/add \
+  -d '{ "payer": "DANNON", "points": 1000, "timestamp": "2020-11-02T14:00:00Z" }'
+
+curl -X POST \
+  http://localhost:8090/v1/points/add \
+  -d '{ "payer": "UNILEVER", "points": 200, "timestamp": "2020-10-31T11:00:00Z" }'
+
+curl -X POST \
+  http://localhost:8090/v1/points/add \
+  -d '{ "payer": "DANNON", "points": -200, "timestamp": "2020-10-31T15:00:00Z" }'
+
+curl -X POST \
+  http://localhost:8090/v1/points/add \
+  -d '{ "payer": "MILLER COORS", "points": 10000, "timestamp": "2020-11-01T14:00:00Z" }'
+
+curl -X POST \
+  http://localhost:8090/v1/points/add \
+  -d '{ "payer": "DANNON", "points": 300, "timestamp": "2020-10-31T10:00:00Z" }'
+```
+
+#### Spend points
+```
+curl -X POST \
+  http://localhost:8090/v1/points/spend \
+  -H 'Postman-Token: cfc0f25b-5469-4cd3-8dc6-b9b7383f1fb3' \
+  -d '{
+	"points": 5000
+}'
+```
+
+#### Get payer balances
+```
+curl -X GET http://localhost:8090/v1/payers
 ```
