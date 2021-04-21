@@ -14,16 +14,16 @@ import (
 func TestSpendPoints(t *testing.T) {
 	// Holder for inputs and expectations
 	type spendTest struct {
-		input []model.Transaction
-		points int
-		expected []model.Transaction
+		input       []model.Transaction
+		points      int
+		expected    []model.Transaction
 		errExpected bool
 	}
 
 	// Create test cases
 	tests := map[string]spendTest{
 		"Assignment example": {
-			input: test.Data,
+			input:  test.Data,
 			points: 5000,
 			expected: []model.Transaction{
 				{Payer: "DANNON", Points: -100},
@@ -41,28 +41,27 @@ func TestSpendPoints(t *testing.T) {
 			},
 		},
 		"Negative points requested returns error": {
-			input: test.Data,
-			points: -1,
-			expected: []model.Transaction{},
+			input:       test.Data,
+			points:      -1,
+			expected:    []model.Transaction{},
 			errExpected: true,
 		},
 		"Insufficient points returns error": {
 			input: []model.Transaction{
 				{Payer: "DANNON", Points: 1000},
 			},
-			points: 1001,
-			expected: []model.Transaction{},
+			points:      1001,
+			expected:    []model.Transaction{},
 			errExpected: true,
 		},
 	}
 
-
 	// Execute tests
 	for name, tc := range tests {
-		t.Run(name, func(t *testing.T){
+		t.Run(name, func(t *testing.T) {
 			userID := "1"
-			db := db.NewInMemoryDB()
-			service := services.NewPointService(db)
+			database := db.NewInMemoryDB()
+			service := services.NewPointService(database)
 
 			for _, transaction := range tc.input {
 				err := service.AddPoints(userID, transaction)
@@ -85,10 +84,31 @@ func TestSpendPoints(t *testing.T) {
 	}
 }
 
-func TestAddPoints(t *testing.T){
+func TestSpendPoints_multiple_calls_exhaust_points(t *testing.T) {
 	userID := "1"
-	db := db.NewInMemoryDB()
-	service := services.NewPointService(db)
+	database := db.NewInMemoryDB()
+	service := services.NewPointService(database)
+
+	transaction := model.Transaction{
+		Payer:     "DANNON",
+		Points:    300,
+		Timestamp: test.ParseTime("2020-11-02T14:00:00Z"),
+	}
+	err := service.AddPoints(userID, transaction)
+	assert.NoError(t, err)
+
+	transactions, err := service.SpendPoints(userID, 200)
+	assert.NoError(t, err)
+	assert.Len(t, transactions, 1)
+
+	_, err = service.SpendPoints(userID, 200)
+	assert.Error(t, err)
+}
+
+func TestAddPoints(t *testing.T) {
+	userID := "1"
+	database := db.NewInMemoryDB()
+	service := services.NewPointService(database)
 
 	// Load test data
 	for _, tran := range test.Data {
@@ -98,7 +118,7 @@ func TestAddPoints(t *testing.T){
 
 	// No error when negative points and balance is sufficient
 	tran := model.Transaction{
-		Payer: "MILLER COORS",
+		Payer:  "MILLER COORS",
 		Points: -4000,
 	}
 	err := service.AddPoints(userID, tran)
@@ -106,7 +126,7 @@ func TestAddPoints(t *testing.T){
 
 	// Error when negative points and balance is insufficient
 	tran = model.Transaction{
-		Payer: "DANNON",
+		Payer:  "DANNON",
 		Points: -4000,
 	}
 	err = service.AddPoints(userID, tran)

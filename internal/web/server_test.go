@@ -27,7 +27,7 @@ func TestGetPayers(t *testing.T) {
 		resp := env.PerformRequest("GET", fmt.Sprintf("/v1/users/%s/payers", userID), nil)
 		assert.Equal(t, http.StatusOK, resp.StatusCode, "Should return status 200")
 
-		accounts := []model.Account{}
+		accounts := make([]model.Account, 0)
 		err := json.NewDecoder(resp.Body).Decode(&accounts)
 		if err != nil {
 			t.Fatal(err)
@@ -59,6 +59,18 @@ func TestAddTransaction(t *testing.T) {
 	})
 }
 
+func TestAddTransaction_error_conditions(t *testing.T) {
+	withEnv(t, func(env serverEnv) {
+		userID := "1"
+
+		resp := env.PerformRequest(
+			"POST",
+			fmt.Sprintf("/v1/users/%s/points/add", userID),
+			"garbage")
+		assert.Equal(t, http.StatusUnprocessableEntity, resp.StatusCode, "Should return status 422")
+	})
+}
+
 func TestSpendPoints(t *testing.T) {
 	withEnv(t, func(env serverEnv) {
 		userID := "1"
@@ -76,7 +88,7 @@ func TestSpendPoints(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode, "Should return status 200")
 
 		// Check response for new transactions
-		transactions := []model.Transaction{}
+		transactions := make([]model.Transaction, 0)
 		err := json.NewDecoder(resp.Body).Decode(&transactions)
 		if err != nil {
 			t.Fatal(err)
@@ -102,26 +114,39 @@ func TestSpendPoints(t *testing.T) {
 	})
 }
 
+func TestSpendPoints_error_conditions(t *testing.T) {
+	withEnv(t, func(env serverEnv) {
+		userID := "1"
+
+		resp := env.PerformRequest(
+			"POST",
+			fmt.Sprintf("/v1/users/%s/points/spend", userID),
+			"garbage")
+		assert.Equal(t, http.StatusUnprocessableEntity, resp.StatusCode, "Should return status 422")
+	})
+
+}
+
 // serverEnv is a struct used to house test dependencies
 type serverEnv struct {
 	db      *db.InMemoryDB
 	service *services.PointService
 	server  *Server
-	t *testing.T
+	t       *testing.T
 }
 
 // withEnv sets up common test dependencies and helper methods and makes them available via a serverEnv
 // to the given function
 func withEnv(t *testing.T, f func(env serverEnv)) {
-	db := db.NewInMemoryDB()
-	service := services.NewPointService(db)
+	database := db.NewInMemoryDB()
+	service := services.NewPointService(database)
 	server := NewServer(service)
 
 	env := serverEnv{
-		db:      db,
+		db:      database,
 		service: service,
 		server:  server,
-		t: t,
+		t:       t,
 	}
 
 	f(env)

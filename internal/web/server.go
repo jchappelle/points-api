@@ -47,11 +47,11 @@ func (s *Server) Start(port int) {
 }
 
 func (s *Server) setupHandlers() http.Handler {
-	mux := mux.NewRouter()
-	mux.HandleFunc("/v1/users/{userID}/points/add", s.addPointsHandler).Methods("POST")
-	mux.HandleFunc("/v1/users/{userID}/payers", s.getPayersHandler).Methods("GET")
-	mux.HandleFunc("/v1/users/{userID}/points/spend", s.spendPointsHandler).Methods("POST")
-	return loggingMiddleware(mux)
+	router := mux.NewRouter()
+	router.HandleFunc("/v1/users/{userID}/points/add", s.addPointsHandler).Methods("POST")
+	router.HandleFunc("/v1/users/{userID}/payers", s.getPayersHandler).Methods("GET")
+	router.HandleFunc("/v1/users/{userID}/points/spend", s.spendPointsHandler).Methods("POST")
+	return loggingMiddleware(router)
 }
 
 func (s *Server) spendPointsHandler(w http.ResponseWriter, req *http.Request) {
@@ -67,14 +67,14 @@ func (s *Server) spendPointsHandler(w http.ResponseWriter, req *http.Request) {
 	spendPointsRequest := spendPointsRequest{}
 	err := json.NewDecoder(req.Body).Decode(&spendPointsRequest)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 		return
 	}
 
 	// Try to spend the points
 	newTransactions, err := s.service.SpendPoints(userID, spendPointsRequest.Points)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -118,7 +118,7 @@ func (s *Server) addPointsHandler(w http.ResponseWriter, req *http.Request) {
 	transaction := model.Transaction{}
 	err := json.NewDecoder(req.Body).Decode(&transaction)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 		return
 	}
 

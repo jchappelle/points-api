@@ -57,6 +57,11 @@ func (s *PointService) SpendPoints(userID string, points int) ([]model.Transacti
 	if points <= 0 {
 		return []model.Transaction{}, errors.New("points must be a positive integer")
 	}
+	totalPoints := s.getTotalPointsForUser(userID)
+	if points > totalPoints {
+		return []model.Transaction{}, notEnoughPointsErr
+	}
+
 	transactions := s.DB.GetTransactions(userID)
 
 	pointsRemaining := points
@@ -80,10 +85,6 @@ func (s *PointService) SpendPoints(userID string, points int) ([]model.Transacti
 				Timestamp: time.Now(),
 			}
 		}
-	}
-
-	if pointsRemaining > 0 {
-		return []model.Transaction{}, notEnoughPointsErr
 	}
 
 	var newTransactions []model.Transaction
@@ -111,6 +112,15 @@ func (s *PointService) getTotalPointsForPayer(userID string, payer string) int {
 		if tran.Payer == payer {
 			pointSum += tran.Points
 		}
+	}
+	return pointSum
+}
+
+func (s *PointService) getTotalPointsForUser(userID string) int {
+	pointSum := 0
+	transactions := s.DB.GetTransactions(userID)
+	for _, tran := range transactions {
+		pointSum += tran.Points
 	}
 	return pointSum
 }
