@@ -35,7 +35,9 @@ func (db *InMemoryDB) GetTransactions(userID string) []model.Transaction {
 	}
 }
 
-// AddTransaction adds the given model.Transaction for this user
+// AddTransaction adds the given model.Transaction for this user. This function
+// makes no assumptions about business logic. For example it does no validation
+// that the sum of transactions should not be negative
 func (db *InMemoryDB) AddTransaction(userID string, transaction model.Transaction) {
 	if transactions, ok := db.UserTransactions[userID]; ok {
 		db.UserTransactions[userID] = append(transactions, transaction)
@@ -48,7 +50,7 @@ func (db *InMemoryDB) AddTransaction(userID string, transaction model.Transactio
 func (db *InMemoryDB) GetAccounts(userID string) []model.Account {
 	accountMap := db.getAccountMap(userID)
 
-	var result []model.Account
+	result := make([]model.Account, 0)
 	for _, value := range accountMap {
 		result = append(result, value)
 	}

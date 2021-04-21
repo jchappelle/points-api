@@ -69,7 +69,7 @@ func (s *Server) spendPointsHandler(w http.ResponseWriter, req *http.Request) {
 	// Try to spend the points
 	newTransactions, err := s.service.SpendPoints(userID, spendPointsRequest.Points)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusUnprocessableEntity)
 		return
 	}
 

@@ -54,6 +54,9 @@ func (s *PointService) AddPoints(userID string, transaction model.Transaction) e
 // forward and returns new transactions as a result of the operation. Returns an error if
 // there are not enough points.
 func (s *PointService) SpendPoints(userID string, points int) ([]model.Transaction, error) {
+	if points <= 0 {
+		return []model.Transaction{}, errors.New("points must be a positive integer")
+	}
 	transactions := s.DB.GetTransactions(userID)
 
 	pointsRemaining := points
