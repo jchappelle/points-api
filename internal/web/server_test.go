@@ -16,26 +16,22 @@ import (
 )
 
 func TestGetPayers(t *testing.T) {
-	withEnv(func(env serverEnv) {
+	withEnv(t, func(env serverEnv) {
 		userID := "1"
 		for _, transaction := range test.Data {
-			env.service.AddPoints(userID, transaction)
+			err := env.service.AddPoints(userID, transaction)
+			if err != nil {
+				t.Fatal(err)
+			}
 		}
-
-		r, err := http.NewRequest("GET", fmt.Sprintf("/v1/users/%s/payers", userID), nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		w := httptest.NewRecorder()
-		handler := env.server.setupHandlers()
-		handler.ServeHTTP(w, r)
-
-		resp := w.Result()
-
+		resp := env.PerformRequest("GET", fmt.Sprintf("/v1/users/%s/payers", userID), nil)
 		assert.Equal(t, http.StatusOK, resp.StatusCode, "Should return status 200")
 
 		accounts := []model.Account{}
-		json.NewDecoder(resp.Body).Decode(&accounts)
+		err := json.NewDecoder(resp.Body).Decode(&accounts)
+		if err != nil {
+			t.Fatal(err)
+		}
 
 		assert.Len(t, accounts, 3)
 		assert.Equal(t, accounts[0].Payer, "DANNON")
@@ -44,27 +40,17 @@ func TestGetPayers(t *testing.T) {
 }
 
 func TestAddTransaction(t *testing.T) {
-	withEnv(func(env serverEnv) {
+	withEnv(t, func(env serverEnv) {
 		userID := "1"
-		transaction := model.Transaction{
-			Payer:     "DANNON",
-			Points:    1000,
-			Timestamp: test.ParseTime("2020-11-02T14:00:00Z"),
-		}
-		requestBody, err := json.Marshal(transaction)
-		assert.NoError(t, err)
 
-		r, err := http.NewRequest("POST", fmt.Sprintf("/v1/users/%s/points/add", userID), bytes.NewBufferString(string(requestBody)))
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		w := httptest.NewRecorder()
-		handler := env.server.setupHandlers()
-		handler.ServeHTTP(w, r)
-
-		resp := w.Result()
-
+		resp := env.PerformRequest(
+			"POST",
+			fmt.Sprintf("/v1/users/%s/points/add", userID),
+			model.Transaction{
+				Payer:     "DANNON",
+				Points:    1000,
+				Timestamp: test.ParseTime("2020-11-02T14:00:00Z"),
+			})
 		assert.Equal(t, http.StatusNoContent, resp.StatusCode, "Should return status 204")
 
 		transactions := env.db.GetTransactions(userID)
@@ -74,35 +60,43 @@ func TestAddTransaction(t *testing.T) {
 }
 
 func TestSpendPoints(t *testing.T) {
-	withEnv(func(env serverEnv) {
+	withEnv(t, func(env serverEnv) {
 		userID := "1"
 		for _, transaction := range test.Data {
-			env.service.AddPoints(userID, transaction)
+			err := env.service.AddPoints(userID, transaction)
+			assert.NoError(t, err)
 		}
 
-		spendPointsRequest := spendPointsRequest{
-			Points: 5000,
-		}
-		requestBody, err := json.Marshal(spendPointsRequest)
-		assert.NoError(t, err)
+		resp := env.PerformRequest(
+			"POST",
+			fmt.Sprintf("/v1/users/%s/points/spend", userID),
+			spendPointsRequest{
+				Points: 5000,
+			})
+		assert.Equal(t, http.StatusOK, resp.StatusCode, "Should return status 200")
 
-		r, err := http.NewRequest("POST", fmt.Sprintf("/v1/users/%s/points/spend", userID), bytes.NewBufferString(string(requestBody)))
+		// Check response for new transactions
+		transactions := []model.Transaction{}
+		err := json.NewDecoder(resp.Body).Decode(&transactions)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		w := httptest.NewRecorder()
-		handler := env.server.setupHandlers()
-		handler.ServeHTTP(w, r)
-
-		resp := w.Result()
-
-		assert.Equal(t, http.StatusOK, resp.StatusCode, "Should return status 200")
-
-		transactions := env.db.GetTransactions(userID)
-		assert.Len(t, transactions, 8)
+		assert.Len(t, transactions, 3)
 		assert.Equal(t, "DANNON", transactions[0].Payer)
-		assert.Equal(t, 300, transactions[0].Points)
+		assert.Equal(t, -100, transactions[0].Points)
+		assert.Equal(t, "UNILEVER", transactions[1].Payer)
+		assert.Equal(t, -200, transactions[1].Points)
+		assert.Equal(t, "MILLER COORS", transactions[2].Payer)
+		assert.Equal(t, -4700, transactions[2].Points)
+
+		// Check DB has the new transactions
+		transactions = env.db.GetTransactions(userID)
+		assert.Len(t, transactions, 8)
+		assert.Equal(t, "DANNON", transactions[5].Payer)
+		assert.Equal(t, -100, transactions[5].Points)
+		assert.Equal(t, "UNILEVER", transactions[6].Payer)
+		assert.Equal(t, -200, transactions[6].Points)
 		assert.Equal(t, "MILLER COORS", transactions[7].Payer)
 		assert.Equal(t, -4700, transactions[7].Points)
 	})
@@ -113,10 +107,12 @@ type serverEnv struct {
 	db      *db.InMemoryDB
 	service *services.PointService
 	server  *Server
+	t *testing.T
 }
 
-// withEnv sets up common test dependencies and makes them available via a serverEnv to the given function
-func withEnv(f func(env serverEnv)) {
+// withEnv sets up common test dependencies and helper methods and makes them available via a serverEnv
+// to the given function
+func withEnv(t *testing.T, f func(env serverEnv)) {
 	db := db.NewInMemoryDB()
 	service := services.NewPointService(db)
 	server := NewServer(service)
@@ -125,7 +121,26 @@ func withEnv(f func(env serverEnv)) {
 		db:      db,
 		service: service,
 		server:  server,
+		t: t,
 	}
 
 	f(env)
+}
+
+func (e *serverEnv) PerformRequest(method, url string, payloadObj interface{}) *http.Response {
+	body, err := json.Marshal(payloadObj)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+
+	r, err := http.NewRequest(method, url, bytes.NewBufferString(string(body)))
+	if err != nil {
+		e.t.Fatal(err)
+	}
+
+	w := httptest.NewRecorder()
+	handler := e.server.setupHandlers()
+	handler.ServeHTTP(w, r)
+
+	return w.Result()
 }

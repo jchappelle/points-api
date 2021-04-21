@@ -17,7 +17,7 @@ type InMemoryDB struct {
 func NewInMemoryDB() *InMemoryDB {
 	log.Println("Creating new in-memory database")
 
-	userTransactions := make(map[string][]model.Transaction, 0)
+	userTransactions := make(map[string][]model.Transaction)
 	return &InMemoryDB{
 		UserTransactions: userTransactions,
 	}
@@ -68,7 +68,7 @@ func (db *InMemoryDB) GetAccount(userID, payer string) (model.Account, bool) {
 }
 
 func (db *InMemoryDB) getAccountMap(userID string) map[string]model.Account {
-	var accountMap = make(map[string]model.Account, 0)
+	var accountMap = make(map[string]model.Account)
 	transactions := db.GetTransactions(userID)
 	for _, tran := range transactions {
 		if account, ok := accountMap[tran.Payer]; ok {

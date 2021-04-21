@@ -60,7 +60,7 @@ func (s *PointService) SpendPoints(userID string, points int) ([]model.Transacti
 	transactions := s.DB.GetTransactions(userID)
 
 	pointsRemaining := points
-	newTranMap := make(map[string]*model.Transaction, 0)
+	newTranMap := make(map[string]*model.Transaction)
 	for i := 0; i < len(transactions) && pointsRemaining > 0; i++ {
 		tran := transactions[i]
 

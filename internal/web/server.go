@@ -14,6 +14,7 @@ type spendPointsRequest struct {
 	Points int `json:"points"`
 }
 
+// pointService is an abstraction for the service layer methods the web server depends on
 type pointService interface {
 	AddPoints(userID string, transaction model.Transaction) error
 	GetAccounts(userID string) []model.Account
@@ -38,7 +39,11 @@ func NewServer(service pointService) *Server {
 func (s *Server) Start(port int) {
 	addr := fmt.Sprintf(":%d", port)
 	log.Printf("Starting web server, listening at %s", addr)
-	http.ListenAndServe(addr, s.setupHandlers())
+
+	err := http.ListenAndServe(addr, s.setupHandlers())
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 func (s *Server) setupHandlers() http.Handler {
@@ -69,13 +74,16 @@ func (s *Server) spendPointsHandler(w http.ResponseWriter, req *http.Request) {
 	// Try to spend the points
 	newTransactions, err := s.service.SpendPoints(userID, spendPointsRequest.Points)
 	if err != nil {
-		w.WriteHeader(http.StatusUnprocessableEntity)
+		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 		return
 	}
 
 	// Return final response
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(newTransactions)
+	err = json.NewEncoder(w).Encode(newTransactions)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 func (s *Server) getPayersHandler(w http.ResponseWriter, req *http.Request) {
@@ -90,7 +98,11 @@ func (s *Server) getPayersHandler(w http.ResponseWriter, req *http.Request) {
 	accounts := s.service.GetAccounts(userID)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(accounts)
+	err := json.NewEncoder(w).Encode(accounts)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 func (s *Server) addPointsHandler(w http.ResponseWriter, req *http.Request) {

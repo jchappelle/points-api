@@ -77,7 +77,7 @@ func TestSpendPoints(t *testing.T) {
 			}
 			assert.Equal(t, len(actual), len(tc.expected))
 
-			for i, _ := range actual {
+			for i := range actual {
 				assert.Equal(t, actual[i].Payer, tc.expected[i].Payer)
 				assert.Equal(t, actual[i].Points, tc.expected[i].Points)
 			}
